@@ -17,7 +17,7 @@ USB="
 "
 
 USE_VIRTIO_GPU_GL=0  # use virtio-gpu-gl
-VGA=qxl  # specify 'none', to use virtio-gpu-gl (default=qxl)
+VGA=virtio  # default=virtio, set to 'none' if using virtio-gpu-gl
 CPUS=  # manually set the number of CPUs
 RAM=  # manually set the amount of RAM, e.g. 12G (don't forget M or G)
 IMG_OPTIONS="format=qcow2,cache=writeback,l2-cache-size=128K"  # VM disk image options
