@@ -1,0 +1,17 @@
+[Desktop Entry]
+Actions=
+Categories=Other;X-GNOME-Other;
+Comment=Microsoft Windows 10 x64 in a QEMU virtual machine
+Exec=caffeinate /opt/vm/windows_10.sh
+Icon=/home/olaf/.icons/windows-10.png
+Name=Windows 10
+NoDisplay=false
+Path=
+PrefersNonDefaultGPU=false
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+Version=1.1
+X-KDE-SubstituteUID=false
+X-KDE-Username=

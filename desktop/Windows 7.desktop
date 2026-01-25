@@ -1,0 +1,17 @@
+[Desktop Entry]
+Actions=
+Categories=Other;X-GNOME-Other;
+Comment=Microsoft Windows 7 x64 in a QEMU virtual machine
+Exec=/opt/vm/windows_7.sh
+Icon=/home/olaf/.icons/windows-7.png
+Name=Windows 7
+NoDisplay=false
+Path=
+PrefersNonDefaultGPU=false
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+Version=1.1
+X-KDE-SubstituteUID=false
+X-KDE-Username=
