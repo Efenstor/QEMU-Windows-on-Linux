@@ -35,3 +35,8 @@ Besides listing your devices in the USB variable in the script, you have to lowe
     SUBSYSTEM=="usb", ATTRS{idVendor}=="VENDOR_ID", ATTRS{idProduct}=="PRODUCT_ID", MODE:="0666"
 
 Replace VENDOR_ID and PRODUCT_ID for the ID data you get using the `lsusb` command.
+
+## Desktop integration
+
+There is a couple of .desktop files in the `desktop` dir. As they are they are intended to be used with the `caffeine` tool which prevents PC from going to sleep (specifically from locking the screen) while VM is running because this situation may cause all sorts of issues.
+
