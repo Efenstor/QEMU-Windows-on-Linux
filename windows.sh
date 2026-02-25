@@ -3,11 +3,11 @@
 # Modified in 2026
 
 WIN_VERSION=10  # Windows version, 7 or 10
-SPICE=0  # use spice
-SPICE_ZOOM=180  # spice viewer zoom
+SPICE=1  # use spice
+SPICE_FULLSCREEN=1  # spice fullscreen mode
+SPICE_ZOOM=180  # spice viewer zoom (windowed mode)
 IMG="$HOME/qemu/windows_10.qcow2"  # VM disk file name
 INSTALL_DISK=  # Installation media
-VGA=qxl  # set to 'virtio' for Win10, 'qxl' for Win7, 'none' when using virtio-gpu-gl
 RRAM=4  # amount of RAM reserved in GB
 RCPUS=2  # number of CPUs reserved
 SHARED_DIR="$HOME"/Public  # Shared directory
@@ -108,7 +108,7 @@ parse_usb
 
 # Display
 if [ $SPICE -eq 1 ]; then
-  DISPLAY="-nographic -spice unix=on,addr=\"$SOCK\",disable-ticketing=on,gl=on"
+  DISPLAY="-nographic -spice unix=on,addr=\"$SOCK\",disable-ticketing=on,image-compression=quic,playback-compression=off,gl=on"
 else
   DISPLAY="-display gtk,window-close=off,gl=on,show-menubar=off,zoom-to-fit=on -rtc base=localtime,clock=host"
 fi
@@ -163,10 +163,16 @@ if [ $SPICE -eq 1 ]; then
     fi
     sleep .25
   done
+  # Fullscreen
+  if [ $SPICE_FULLSCREEN -eq 1 ]; then
+    fs="--full-screen"
+  else
+    fs=
+  fi
 
   # Start the Spice viewer
   echo "Starting the remote viewer..."
-  remote-viewer --auto-resize=always -z $SPICE_ZOOM spice+unix://"$SOCK" & VIEWER_PID=$!
+  remote-viewer --auto-resize=always -z $SPICE_ZOOM $fs spice+unix://"$SOCK" & VIEWER_PID=$!
 fi
 
 if [ ! "$CDROM" ]; then
