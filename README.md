@@ -9,6 +9,7 @@ Features:
 * Easy sharing of USB devices (see the section below)
 * Shared folder with symbolic links allowed
 * GTK and Spice version (for Wayland use GTK, for X11 use Spice)
+* Can reconnect to a running instance (Spice only)
 
 ## Prerequisites
 

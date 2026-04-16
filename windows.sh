@@ -57,100 +57,136 @@ parse_usb() {
   fi
 }
 
-# Check for the required tools
-tools="qemu-system-x86_64 smbcontrol"
-if [ $SPICE -eq 1 ]; then
-  tools="$tools remote-viewer"
+# Check for a running instance
+reconnect=
+if [ $SPICE -eq 1 ] && [ -S "$SOCK" ]; then
+  echo "Found an existing socket file \"$SOCK\"."
+  echo "Trying to find a running instance of QEMU..."
+  qemu_count=$(ps -A | grep qemu-system-x86 | wc -l)
+  if [ $qemu_count -gt 1 ]; then
+    echo "
+More than one running QEMU instance found. Impossible to determine an instance
+the socket file belongs to. Resolve the situation manually. Exiting..."
+    exit
+  elif [ $qemu_count -eq 1 ]; then
+    echo -n "
+A single running instance of QEMU found. There is a possibility that the socket
+file belongs to that instance. Try reconnecting to that instance? Y/n "
+    read a
+    if [ "$a" = "n" ]; then
+      echo "Then exiting..."
+      exit
+    fi
+    reconnect=1
+  else
+    echo -n "
+No running instances of QEMU found. Most likely the socket file is a remnant of
+a previous crash. Delete the file and run QEMU? Y/n "
+    read a
+    if [ "$a" = "n" ]; then
+      echo "Then exiting..."
+      exit
+    fi
+    rm -f "$SOCK"
+  fi
 fi
-for i in $tools; do
-  if ! which -s "$i"; then
-    echo "$i program not found."
+
+if [ ! "$reconnect" ]; then
+  # Check for the required tools
+  tools="qemu-system-x86_64 smbcontrol"
+  if [ $SPICE -eq 1 ]; then
+    tools="$tools remote-viewer"
+  fi
+  for i in $tools; do
+    if ! which -s "$i"; then
+      echo "$i program not found."
+      exit
+    fi
+  done
+
+  # Check if VM image is there
+  if [ ! -f "$IMG" ]; then
+    echo "VM not found!"
     exit
   fi
-done
 
-# Check if VM image is there
-if [ ! -f "$IMG" ]; then
-  echo "VM not found!"
-  exit
-fi
+  # Using CD-ROM
+  if [ -e "$INSTALL_DISK" ]; then
+    CDROM="-cdrom \"$INSTALL_DISK\""
+  else
+    CDROM=
+  fi
 
-# Using CD-ROM
-if [ -e "$INSTALL_DISK" ]; then
-  CDROM="-cdrom \"$INSTALL_DISK\""
-else
-  CDROM=
-fi
+  # Detect memory and CPUs
+  if [ ! "$RAM" ]; then
+    memkb=$(cat /proc/meminfo | grep "MemTotal: " | sed "s/.*: *//;s/ .*//")
+    RAM=$(printf "%.0fG" $(echo "( 32778164 / 1024 / 1024 ) - $RRAM" | bc -l))
+    echo "Using VM RAM = $RAM ("$RRAM"G reserved)"
+  else
+    echo "Using VM RAM = $RAM"
+  fi
+  if [ ! "$CPUS" ]; then
+    CPUS=$(nproc --ignore=$RCPUS)
+    echo "Using VM CPUs = $CPUS ($RCPUS reserved)"
+  else
+    echo "Using VM CPUs = $CPUS"
+  fi
 
-# Detect memory and CPUs
-if [ ! "$RAM" ]; then
-  memkb=$(cat /proc/meminfo | grep "MemTotal: " | sed "s/.*: *//;s/ .*//")
-  RAM=$(printf "%.0fG" $(echo "( 32778164 / 1024 / 1024 ) - $RRAM" | bc -l))
-  echo "Using VM RAM = $RAM ("$RRAM"G reserved)"
-else
-  echo "Using VM RAM = $RAM"
-fi
-if [ ! "$CPUS" ]; then
-  CPUS=$(nproc --ignore=$RCPUS)
-  echo "Using VM CPUs = $CPUS ($RCPUS reserved)"
-else
-  echo "Using VM CPUs = $CPUS"
-fi
+  # virtio-gpu-gl
+  if [ $USE_VIRTIO_GPU_GL -eq 1 ]; then
+    VIRTIO_GPU_GL="-device virtio-gpu-gl-pci"
+  fi
 
-# virtio-gpu-gl
-if [ $USE_VIRTIO_GPU_GL -eq 1 ]; then
-  VIRTIO_GPU_GL="-device virtio-gpu-gl-pci"
-fi
+  # USB devices
+  echo "USB devices to be added:"
+  parse_usb
 
-# USB devices
-echo "USB devices to be added:"
-parse_usb
+  # Display
+  if [ $SPICE -eq 1 ]; then
+    DISPLAY="-nographic -spice unix=on,addr=\"$SOCK\",disable-ticketing=on,image-compression=quic,playback-compression=off,gl=on"
+  else
+    DISPLAY="-display gtk,window-close=off,gl=on,show-menubar=off,zoom-to-fit=on -rtc base=localtime,clock=host"
+  fi
 
-# Display
-if [ $SPICE -eq 1 ]; then
-  DISPLAY="-nographic -spice unix=on,addr=\"$SOCK\",disable-ticketing=on,image-compression=quic,playback-compression=off,gl=on"
-else
-  DISPLAY="-display gtk,window-close=off,gl=on,show-menubar=off,zoom-to-fit=on -rtc base=localtime,clock=host"
-fi
+  # Version specific
+  if [ $WIN_VERSION -eq 10 ]; then
+    CPU="-cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_vpindex,hv_synic,hv_time,hv_stimer,hv_ipi,hv_runtime,hv_reset,hv_frequencies,hv_reenlightenment,hv_tlbflush"
+    AUDIO="-audiodev pa,driver=pa,id=pa0 -device ich9-intel-hda -device hda-output,audiodev=pa0"
+  else
+    CPU="-cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_vpindex,hv_synic,hv_time,hv_stimer,hv_ipi"
+    AUDIO="-audiodev pa,driver=pa,id=pa0 -device AC97,audiodev=pa0"
+  fi
 
-# Version specific
-if [ $WIN_VERSION -eq 10 ]; then
-  CPU="-cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_vpindex,hv_synic,hv_time,hv_stimer,hv_ipi,hv_runtime,hv_reset,hv_frequencies,hv_reenlightenment,hv_tlbflush"
-  AUDIO="-audiodev pa,driver=pa,id=pa0 -device ich9-intel-hda -device hda-output,audiodev=pa0"
-else
-  CPU="-cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_vpindex,hv_synic,hv_time,hv_stimer,hv_ipi"
-  AUDIO="-audiodev pa,driver=pa,id=pa0 -device AC97,audiodev=pa0"
-fi
+  # Start QEMU
+  echo "Starting QEMU..."
+  eval qemu-system-x86_64 -k ru \
+    -machine q35,accel=kvm \
+    $CPU \
+    -smp cpus=$CPUS -m size=$RAM \
+    -vga $VGA \
+    $DISPLAY \
+    -nic user,model=e1000,ipv6=off,smb=\"$SHARED_DIR\" \
+    -drive id=bootdisk,file=\"$IMG\",$IMG_OPTIONS,if=none \
+    $CDROM \
+    -device ahci,id=ahci0 \
+    -device ide-hd,drive=bootdisk,bus=ahci0.0 \
+    $VIRTIO_GPU_GL \
+    -device virtio-balloon \
+    $AUDIO \
+    -name \"$NAME\" \
+    -usb -device nec-usb-xhci,id=xhci0 \
+    -usb -device usb-ehci,id=ehci0 \
+    -usb -device usb-ehci,id=ehci1 \
+    -device usb-tablet,bus=ehci0.0 \
+    -device usb-kbd,bus=ehci1.0 \
+    $usb_args & QEMU_PID=$!
 
-# Start QEMU
-echo "Starting QEMU..."
-eval qemu-system-x86_64 -k ru \
-  -machine q35,accel=kvm \
-  $CPU \
-  -smp cpus=$CPUS -m size=$RAM \
-  -vga $VGA \
-  $DISPLAY \
-  -nic user,model=e1000,ipv6=off,smb=\"$SHARED_DIR\" \
-  -drive id=bootdisk,file=\"$IMG\",$IMG_OPTIONS,if=none \
-  $CDROM \
-  -device ahci,id=ahci0 \
-  -device ide-hd,drive=bootdisk,bus=ahci0.0 \
-  $VIRTIO_GPU_GL \
-  -device virtio-balloon \
-  $AUDIO \
-  -name \"$NAME\" \
-  -usb -device nec-usb-xhci,id=xhci0 \
-  -usb -device usb-ehci,id=ehci0 \
-  -usb -device usb-ehci,id=ehci1 \
-  -device usb-tablet,bus=ehci0.0 \
-  -device usb-kbd,bus=ehci1.0 \
-  $usb_args & QEMU_PID=$!
-
-# Wait a bit and check if the QEMU process still exists
-sleep 1
-if ! ps -p $QEMU_PID > /dev/null; then
-  echo "QEMU cannot start."
-  exit
+  # Wait a bit and check if the QEMU process still exists
+  sleep 1
+  if ! ps -p $QEMU_PID > /dev/null; then
+    echo "QEMU cannot start."
+    exit
+  fi
 fi
 
 if [ $SPICE -eq 1 ]; then
@@ -163,6 +199,7 @@ if [ $SPICE -eq 1 ]; then
     fi
     sleep .25
   done
+
   # Fullscreen
   if [ $SPICE_FULLSCREEN -eq 1 ]; then
     fs="--full-screen"
@@ -172,10 +209,10 @@ if [ $SPICE -eq 1 ]; then
 
   # Start the Spice viewer
   echo "Starting the remote viewer..."
-  remote-viewer --auto-resize=always -z $SPICE_ZOOM $fs spice+unix://"$SOCK" & VIEWER_PID=$!
+  remote-viewer -s --auto-resize=always -z $SPICE_ZOOM $fs spice+unix://"$SOCK" & VIEWER_PID=$!
 fi
 
-if [ ! "$CDROM" ]; then
+if [ ! "$reconnect" ] && [ ! "$CDROM" ]; then
   # Wait until the QEMU Samba server starts
   echo "Wait for the QEMU Samba server to start..."
   while :
@@ -210,19 +247,29 @@ if [ $SPICE -eq 1 ]; then
     fi
     sleep .25
   done
-
-  # Remove the Spice sock
-  rm "$SOCK"
 fi
 
-# Wait until QEMU is done
-echo "Waiting for QEMU to exit..."
-while :
-do
-  if ! ps -p $QEMU_PID > /dev/null; then
-    break
+if [ ! "$reconnect" ]; then
+  # Wait until QEMU is done
+  echo "Waiting for QEMU to exit..."
+  while :
+  do
+    if ! ps -p $QEMU_PID > /dev/null; then
+      break
+    fi
+    sleep .25
+  done
+
+  # Remove the Spice sock
+  if [ $SPICE -eq 1 ]; then
+    if ps -A | grep qemu-system-x86 > /dev/null; then
+      echo "QEMU is still running? Not deleting the socket file."
+    else
+      echo "Deleting the socket file..."
+      rm -f "$SOCK"
+    fi
   fi
-  sleep .25
-done
+fi
 
 echo "Done."
+
